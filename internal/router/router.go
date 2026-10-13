@@ -16,15 +16,42 @@ func New(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.OperatorAuth())
 
-	svc := service.NewItem(repository.NewItem(db), rdb)
-	h := handler.NewItem(svc)
+	// item 相关
+	itemSvc := service.NewItem(repository.NewItem(db), rdb)
+	itemH := handler.NewItem(itemSvc)
 
-	api := r.Group("/api/demo")
+	// locker 相关
+	lockerCellRepo := repository.NewLockerCell(db)
+	lockerParcelRepo := repository.NewLockerParcel(db)
+	lockerSvc := service.NewLocker(lockerCellRepo, lockerParcelRepo)
+	lockerH := handler.NewLocker(lockerSvc)
+
+	api := r.Group("/api")
 	{
-		api.GET("/ping", h.Ping)
-		api.POST("/item", h.CreateItem)
-		api.GET("/list", h.List)
-		api.GET("/cache", h.Cache)
+		// demo 接口
+		demo := api.Group("/demo")
+		{
+			demo.GET("/ping", itemH.Ping)
+			demo.POST("/item", itemH.CreateItem)
+			demo.GET("/list", itemH.List)
+			demo.GET("/cache", itemH.Cache)
+		}
+
+		// 快递柜格口接口
+		locker := api.Group("/locker/cell")
+		{
+			locker.POST("", lockerH.CreateCell)
+			locker.POST("/disable", lockerH.DisableCell)
+		}
+
+		// 快递柜包裹接口
+		parcel := api.Group("/locker/parcel")
+		{
+			parcel.POST("", lockerH.StoreParcel)
+			parcel.POST("/pickup", lockerH.PickupParcel)
+			parcel.GET("/list", lockerH.ListParcelsByPhone)
+		}
 	}
+
 	return r
 }
